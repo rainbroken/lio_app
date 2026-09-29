@@ -14,6 +14,8 @@ add_executable(pointcloud_demo
   src/mainwindow.h
   src/cloudview.cpp
   src/cloudview.h
+  src/transformdialog.cpp
+  src/transformdialog.h
   src/pointclouddata.cpp
   src/pointclouddata.h
 )

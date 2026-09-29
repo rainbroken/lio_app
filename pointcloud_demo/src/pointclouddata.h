@@ -16,6 +16,7 @@ struct CloudPoint {
 class PointCloudData {
 public:
   bool load(const QString &path, QString *error = nullptr);
+  void setPoints(const QVector<CloudPoint> &points);
   bool exportPcd(const QString &path, double zMin, double zMax, QString *error = nullptr) const;
   bool exportPly(const QString &path, double zMin, double zMax, QString *error = nullptr) const;
 

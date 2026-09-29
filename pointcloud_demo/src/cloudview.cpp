@@ -14,14 +14,28 @@ CloudView::CloudView(QWidget *parent) : QOpenGLWidget(parent) {
 }
 
 void CloudView::setPoints(const QVector<CloudPoint> &points, bool resetView) { points_ = points; upload(); if (resetView) fitView(); else update(); }
-void CloudView::setBounds(const QVector3D &minBound, const QVector3D &maxBound) {
+void CloudView::setBounds(const QVector3D &minBound, const QVector3D &maxBound, bool preserveView) {
   minBound_ = minBound; maxBound_ = maxBound;
-  center_ = (minBound_ + maxBound_) * 0.5f;
+  if (!preserveView) center_ = (minBound_ + maxBound_) * 0.5f;
   radius_ = std::max(0.001f, (maxBound_ - minBound_).length() * 0.5f);
 }
 void CloudView::setCropRange(const QVector3D &minRange, const QVector3D &maxRange) { cropMin_ = minRange; cropMax_ = maxRange; update(); }
 void CloudView::setPointSize(float size) { pointSize_ = size; update(); }
-void CloudView::fitView() { distance_ = radius_ * 2.5f; yaw_ = 225.0f; pitch_ = 28.0f; update(); }
+void CloudView::fitView() { distance_ = radius_ * 2.5f; yaw_ = 225.0f; pitch_ = 28.0f; emit viewRotated(); update(); }
+void CloudView::zoom(float factor) { distance_ = std::clamp(distance_ * factor, radius_ * 0.02f, radius_ * 100.0f); update(); }
+void CloudView::zoomIn() { zoom(0.85f); }
+void CloudView::zoomOut() { zoom(1.0f / 0.85f); }
+void CloudView::setAxisView(AxisView direction) {
+  switch (direction) {
+    case AxisView::PositiveX: yaw_ = 0.0f; pitch_ = 0.0f; break;
+    case AxisView::NegativeX: yaw_ = 180.0f; pitch_ = 0.0f; break;
+    case AxisView::PositiveY: yaw_ = 90.0f; pitch_ = 0.0f; break;
+    case AxisView::NegativeY: yaw_ = 270.0f; pitch_ = 0.0f; break;
+    case AxisView::PositiveZ: yaw_ = 0.0f; pitch_ = 90.0f; break;
+    case AxisView::NegativeZ: yaw_ = 0.0f; pitch_ = -90.0f; break;
+  }
+  update();
+}
 void CloudView::setMeasureMode(bool enabled) { measureMode_ = enabled; if (!enabled) { hasMeasureAnchor_ = false; hasMeasurePreview_ = false; } setCursor(enabled ? Qt::CrossCursor : Qt::ArrowCursor); update(); }
 
 void CloudView::initializeGL() {
@@ -67,7 +81,7 @@ void CloudView::paintGL() {
   if (!cloudVisible_ || points_.isEmpty() || !shader_) return;
   QMatrix4x4 view, projection; const float yaw = qDegreesToRadians(yaw_), pitch = qDegreesToRadians(pitch_);
   const QVector3D eye(center_.x() + distance_ * std::cos(pitch) * std::cos(yaw), center_.y() + distance_ * std::cos(pitch) * std::sin(yaw), center_.z() + distance_ * std::sin(pitch));
-  view.lookAt(eye, center_, QVector3D(0, 0, 1)); projection.perspective(55.0f, float(width()) / std::max(1, height()), std::max(0.001f, radius_ / 1000.0f), radius_ * 100.0f);
+  view.lookAt(eye, center_, std::abs(pitch_) == 90.0f ? QVector3D(0, 1, 0) : QVector3D(0, 0, 1)); projection.perspective(55.0f, float(width()) / std::max(1, height()), std::max(0.001f, radius_ / 1000.0f), radius_ * 100.0f);
   glUseProgram(shader_); glUniformMatrix4fv(uMvp_, 1, GL_FALSE, (projection * view).constData()); glUniform3f(uCropMin_, cropMin_.x(), cropMin_.y(), cropMin_.z()); glUniform3f(uCropMax_, cropMax_.x(), cropMax_.y(), cropMax_.z()); glUniform1f(uPointSize_, pointSize_);
   GLenum error = glGetError(); if (error != GL_NO_ERROR) qWarning() << "OpenGL uniform error:" << error << uMvp_ << uPointSize_;
   glBindVertexArray(vao_); error = glGetError(); if (error != GL_NO_ERROR) qWarning() << "OpenGL VAO error:" << error;
@@ -101,17 +115,17 @@ void CloudView::mouseMoveEvent(QMouseEvent *event) {
                         center_.y() + distance_ * std::cos(pitch) * std::sin(yaw),
                         center_.z() + distance_ * std::sin(pitch));
     const QVector3D forward = (center_ - eye).normalized();
-    const QVector3D right = QVector3D::crossProduct(forward, QVector3D(0, 0, 1)).normalized();
+    const QVector3D right = QVector3D::crossProduct(forward, std::abs(pitch_) == 90.0f ? QVector3D(0, 1, 0) : QVector3D(0, 0, 1)).normalized();
     const QVector3D cameraUp = QVector3D::crossProduct(right, forward).normalized();
     center_ -= right * (delta.x() * s);
     center_ += cameraUp * (delta.y() * s);
   }
   else if (buttons.testFlag(Qt::RightButton)) { distance_ *= std::exp(delta.y() * 0.01f); distance_ = std::clamp(distance_, radius_ * 0.02f, radius_ * 100.0f); }
-  else if (buttons.testFlag(Qt::LeftButton)) { yaw_ += delta.x() * 0.45f; pitch_ = std::clamp(pitch_ - delta.y() * 0.35f, -89.0f, 89.0f); }
+  else if (buttons.testFlag(Qt::LeftButton)) { yaw_ += delta.x() * 0.45f; pitch_ = std::clamp(pitch_ - delta.y() * 0.35f, -89.0f, 89.0f); emit viewRotated(); }
   update();
 }
 void CloudView::mouseReleaseEvent(QMouseEvent *event) { if (event->button() == dragButton_) { dragButton_ = Qt::NoButton; releaseMouse(); } }
-void CloudView::wheelEvent(QWheelEvent *event) { distance_ *= std::pow(0.85f, event->angleDelta().y() / 120.0f); distance_ = std::clamp(distance_, radius_ * 0.02f, radius_ * 100.0f); update(); }
+void CloudView::wheelEvent(QWheelEvent *event) { zoom(std::pow(0.85f, event->angleDelta().y() / 120.0f)); }
 void CloudView::mouseDoubleClickEvent(QMouseEvent *event) {
   if (event->button() == Qt::LeftButton) { fitView(); event->accept(); return; }
   QOpenGLWidget::mouseDoubleClickEvent(event);
@@ -121,7 +135,7 @@ bool CloudView::pickPoint(const QPoint &screen, QVector3D *point) const {
   if (points_.isEmpty()) return false;
   QMatrix4x4 view, projection; const float yaw = qDegreesToRadians(yaw_), pitch = qDegreesToRadians(pitch_);
   const QVector3D eye(center_.x() + distance_ * std::cos(pitch) * std::cos(yaw), center_.y() + distance_ * std::cos(pitch) * std::sin(yaw), center_.z() + distance_ * std::sin(pitch));
-  view.lookAt(eye, center_, QVector3D(0, 0, 1)); projection.perspective(55.0f, float(width()) / std::max(1, height()), std::max(0.001f, radius_ / 1000.0f), radius_ * 100.0f);
+  view.lookAt(eye, center_, std::abs(pitch_) == 90.0f ? QVector3D(0, 1, 0) : QVector3D(0, 0, 1)); projection.perspective(55.0f, float(width()) / std::max(1, height()), std::max(0.001f, radius_ / 1000.0f), radius_ * 100.0f);
   const QMatrix4x4 mvp = projection * view; float best = 14.0f * 14.0f; bool found = false;
   for (const auto &p : points_) { if (p.x < cropMin_.x() || p.x > cropMax_.x() || p.y < cropMin_.y() || p.y > cropMax_.y() || p.z < cropMin_.z() || p.z > cropMax_.z()) continue; const QVector4D clip = mvp * QVector4D(p.x, p.y, p.z, 1); if (clip.w() <= 0) continue; const QVector3D ndc = clip.toVector3DAffine(); const QPointF q((ndc.x() + 1) * 0.5 * width(), (1 - ndc.y()) * 0.5 * height()); const float d = std::pow(float(q.x() - screen.x()), 2) + std::pow(float(q.y() - screen.y()), 2); if (d < best) { best = d; *point = QVector3D(p.x, p.y, p.z); found = true; } }
   return found;

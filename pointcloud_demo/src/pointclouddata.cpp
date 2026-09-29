@@ -9,6 +9,17 @@
 #include <sstream>
 #include <vector>
 
+void PointCloudData::setPoints(const QVector<CloudPoint> &points) {
+  points_ = points;
+  minBound_ = QVector3D(std::numeric_limits<float>::max(), std::numeric_limits<float>::max(), std::numeric_limits<float>::max());
+  maxBound_ = QVector3D(-std::numeric_limits<float>::max(), -std::numeric_limits<float>::max(), -std::numeric_limits<float>::max());
+  for (const auto &p : points_) {
+    minBound_.setX(std::min(minBound_.x(), p.x)); minBound_.setY(std::min(minBound_.y(), p.y)); minBound_.setZ(std::min(minBound_.z(), p.z));
+    maxBound_.setX(std::max(maxBound_.x(), p.x)); maxBound_.setY(std::max(maxBound_.y(), p.y)); maxBound_.setZ(std::max(maxBound_.z(), p.z));
+  }
+  sourcePath_.clear();
+}
+
 bool PointCloudData::load(const QString &path, QString *error) {
   QFile file(path);
   if (!file.open(QIODevice::ReadOnly)) { if (error) *error = file.errorString(); return false; }

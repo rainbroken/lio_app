@@ -9,19 +9,24 @@
 class CloudView : public QOpenGLWidget, protected QOpenGLFunctions_3_3_Core {
   Q_OBJECT
 public:
+  enum class AxisView { PositiveX, NegativeX, PositiveY, NegativeY, PositiveZ, NegativeZ };
   explicit CloudView(QWidget *parent = nullptr);
   void setPoints(const QVector<CloudPoint> &points, bool resetView = false);
   qsizetype pointCount() const { return points_.size(); }
-  void setBounds(const QVector3D &minBound, const QVector3D &maxBound);
+  void setBounds(const QVector3D &minBound, const QVector3D &maxBound, bool preserveView = false);
   void setCropRange(const QVector3D &minRange, const QVector3D &maxRange);
   QVector3D projectPoint(const QVector3D &p) const;
   void setPointSize(float size);
   void fitView();
+  void zoomIn();
+  void zoomOut();
+  void setAxisView(AxisView direction);
   void setMeasureMode(bool enabled);
   void setCloudVisible(bool visible) { cloudVisible_ = visible; update(); }
   bool measureMode() const { return measureMode_; }
 
 signals:
+  void viewRotated();
   void pointPicked(const QVector3D &point);
   void measurementPreview(const QVector3D &point);
   void measurementCanceled();
@@ -39,6 +44,7 @@ protected:
 
 private:
   void upload();
+  void zoom(float factor);
   bool pickPoint(const QPoint &screen, QVector3D *point) const;
   QVector<CloudPoint> points_;
   QVector3D minBound_{-1, -1, -1}, maxBound_{1, 1, 1};

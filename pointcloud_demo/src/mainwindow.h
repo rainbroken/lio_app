@@ -5,6 +5,7 @@
 #include "rangeslider.h"
 #include <QMainWindow>
 #include <QVector3D>
+#include <QHash>
 
 class QLabel;
 class QSlider;
@@ -32,6 +33,7 @@ private slots:
   void updateDisplayMode();
   void updateCropRange();
   void toggleFullscreen();
+  void rotateCloud();
 
 private:
   void buildUi();
@@ -51,6 +53,9 @@ private:
   QLabel *toolLabel_ = nullptr;
   QTreeWidget *fileTree_ = nullptr;
   QTreeWidgetItem *selectedPcdItem_ = nullptr;
+  QTreeWidgetItem *activePcdItem_ = nullptr;
+  QHash<QTreeWidgetItem*, QVector<CloudPoint>> cropClouds_;
+  QHash<QTreeWidgetItem*, QVector<CloudPoint>> transformedClouds_;
   int cropSequence_ = 1;
   QVector<QVector3D> measurePoints_;
 };
