@@ -17,8 +17,8 @@ class PointCloudData {
 public:
   bool load(const QString &path, QString *error = nullptr);
   void setPoints(const QVector<CloudPoint> &points);
-  bool exportPcd(const QString &path, double zMin, double zMax, QString *error = nullptr) const;
-  bool exportPly(const QString &path, double zMin, double zMax, QString *error = nullptr) const;
+  bool exportPcd(const QString &path, QString *error = nullptr) const;
+  bool exportPly(const QString &path, QString *error = nullptr) const;
 
   const QVector<CloudPoint> &points() const { return points_; }
   QVector<CloudPoint> displaySample(int maxPoints = 1500000) const;
